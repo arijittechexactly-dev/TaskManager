@@ -117,3 +117,6 @@ dependencies {
         implementation jscFlavor
     }
 }
+
+// Firebase Google Services plugin must be applied at the bottom
+apply plugin: 'com.google.gms.google-services'
