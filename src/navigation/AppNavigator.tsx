@@ -19,7 +19,7 @@ const AuthStack = createNativeStackNavigator<AuthStackParamList>();
 const AppStack = createNativeStackNavigator<AppStackParamList>();
 
 const AuthStackNavigator = () => (
-  <AuthStack.Navigator>
+  <AuthStack.Navigator screenOptions={{ headerShown: false }}>
     <AuthStack.Screen name="Login" component={LoginScreen} options={{ title: 'Login' }} />
     <AuthStack.Screen name="Signup" component={SignupScreen} options={{ title: 'Sign Up' }} />
   </AuthStack.Navigator>
