@@ -7,15 +7,21 @@
 
 import React from 'react';
 import { StatusBar } from 'react-native';
+import { Provider } from 'react-redux';
+import { store } from './src/store';
 import { AuthProvider } from './src/auth/AuthContext';
 import AppNavigator from './src/navigation/AppNavigator';
+import GlobalSyncListeners from './src/app/GlobalSyncListeners';
 
 function App(): React.JSX.Element {
   return (
-    <AuthProvider>
-      <StatusBar barStyle={'dark-content'} />
-      <AppNavigator />
-    </AuthProvider>
+    <Provider store={store}>
+      <AuthProvider>
+        <StatusBar barStyle={'dark-content'} />
+        <GlobalSyncListeners />
+        <AppNavigator />
+      </AuthProvider>
+    </Provider>
   );
 }
 

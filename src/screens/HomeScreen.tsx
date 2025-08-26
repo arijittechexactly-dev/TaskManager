@@ -12,11 +12,12 @@ import {
   Dimensions,
 } from 'react-native';
 import MaterialIcons from '@react-native-vector-icons/material-icons';
-import NetInfo from '@react-native-community/netinfo';
 import { useAuth } from '../auth/AuthContext';
 import { getRealm, newId, TaskRecord } from '../data/realm';
 import { startTaskSync, stopTaskSync, flushPendingToRemote } from '../data/syncService';
 import { scale as s, verticalScale as vs, moderateScale as ms } from 'react-native-size-matters';
+import { useAppSelector } from '../store/hooks';
+import type { RootState } from '../store';
 
 type Task = {
   id: string;
@@ -30,8 +31,8 @@ const HomeScreen: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [inputValue, setInputValue] = useState('');
-  const [online, setOnline] = useState<boolean>(false);
-  const [pendingCount, setPendingCount] = useState<number>(0);
+  const online = useAppSelector((state: RootState) => state.network.online);
+  const pendingCount = useAppSelector((state: RootState) => state.sync.pendingCount);
 
   const greeting = useMemo(() => `Hello${user?.email ? `, ${user.email}` : ''} 👋`, [user?.email]);
   const remainingCount = tasks.filter(t => !t.completed).length;
@@ -187,47 +188,7 @@ const HomeScreen: React.FC = () => {
     };
   }, [user?.uid]);
 
-  // Track online/offline and pending dirty count
-  useEffect(() => {
-    let pendingResults: any | null = null;
-    let unsubscribeNet: undefined | (() => void);
-    let cancelled = false;
-
-    const attach = async () => {
-      if (!user?.uid) {
-        setPendingCount(0);
-        setOnline(false);
-        return;
-      }
-      const realm = await getRealm();
-      if (cancelled) return;
-
-      // Pending (dirty) items listener
-      pendingResults = realm
-        .objects<TaskRecord>('Task')
-        .filtered('userId == $0 AND dirty == true', user.uid);
-      const updatePending = () => setPendingCount(pendingResults.length);
-      updatePending();
-      pendingResults.addListener(updatePending);
-
-      // Connectivity listener
-      unsubscribeNet = NetInfo.addEventListener(state => {
-        const isOnline = Boolean(state.isConnected && state.isInternetReachable);
-        setOnline(isOnline);
-      });
-      const net = await NetInfo.fetch();
-      setOnline(Boolean(net.isConnected && net.isInternetReachable));
-    };
-
-    attach();
-    return () => {
-      try {
-        pendingResults?.removeAllListeners?.();
-      } catch {}
-      unsubscribeNet?.();
-      cancelled = true;
-    };
-  }, [user?.uid]);
+  // Global listeners now handle online and pending count
 
   return (
     <View style={styles.container}>
