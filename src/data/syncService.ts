@@ -54,6 +54,11 @@ export async function startTaskSync(userId: string) {
                   updatedAtMillis: remoteUpdatedAt,
                   dirty: false,
                   deleted: false,
+                  // map optional metadata
+                  // @ts-ignore
+                  priority: (data.priority ?? 'none') as any,
+                  // @ts-ignore
+                  dueAt: data.dueAt?.toDate?.() ?? null,
                 },
                 Realm.UpdateMode.Modified,
               );
@@ -66,6 +71,11 @@ export async function startTaskSync(userId: string) {
               existing.updatedAtMillis = remoteUpdatedAt;
               existing.deleted = false;
               existing.dirty = false; // remote wins
+              // optional metadata
+              // @ts-ignore
+              existing.priority = (data.priority ?? existing.priority ?? 'none') as any;
+              // @ts-ignore
+              existing.dueAt = data.dueAt?.toDate?.() ?? (existing as any).dueAt ?? null;
             }
           });
         });
@@ -125,6 +135,9 @@ export async function flushPendingToRemote() {
           // Preserve the original creation time from local storage; do not overwrite on updates
           createdAt: t.createdAt,
           updatedAt: firestore.FieldValue.serverTimestamp(),
+          // include optional metadata
+          priority: (t as any).priority ?? 'none',
+          dueAt: (t as any).dueAt ?? null,
         },
         {merge: true},
       );
