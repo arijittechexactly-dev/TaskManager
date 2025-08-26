@@ -10,7 +10,9 @@ import {
   Pressable,
   StatusBar,
   Dimensions,
+  Platform,
 } from 'react-native';
+import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import MaterialIcons from '@react-native-vector-icons/material-icons';
 import { useAuth } from '../auth/AuthContext';
 import { getRealm, newId, TaskRecord } from '../data/realm';
@@ -31,6 +33,12 @@ const HomeScreen: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [inputValue, setInputValue] = useState('');
+  const [dateModalVisible, setDateModalVisible] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [timeModalVisible, setTimeModalVisible] = useState(false);
+  const [selectedTime, setSelectedTime] = useState<Date | null>(null);
+  const [priorityModalVisible, setPriorityModalVisible] = useState(false);
+  const [selectedPriority, setSelectedPriority] = useState<'high' | 'medium' | 'low' | 'none' | null>('none');
   const online = useAppSelector((state: RootState) => state.network.online);
   const pendingCount = useAppSelector((state: RootState) => state.sync.pendingCount);
 
@@ -40,7 +48,37 @@ const HomeScreen: React.FC = () => {
   const openAdd = () => {
     setEditingTaskId(null);
     setInputValue('');
+    setSelectedPriority('none');
     setModalVisible(true);
+  };
+
+  const handleOpenTimePicker = () => {
+    if (Platform.OS === 'android') {
+      DateTimePickerAndroid.open({
+        value: selectedTime ?? new Date(),
+        mode: 'time',
+        is24Hour: false,
+        onChange: (_event, date) => {
+          if (date) setSelectedTime(date);
+        },
+      });
+      return;
+    }
+    setTimeModalVisible(true);
+  };
+
+  const handleOpenDatePicker = () => {
+    if (Platform.OS === 'android') {
+      DateTimePickerAndroid.open({
+        value: selectedDate ?? new Date(),
+        mode: 'date',
+        onChange: (_event, date) => {
+          if (date) setSelectedDate(date);
+        },
+      });
+      return;
+    }
+    setDateModalVisible(true);
   };
   const openEdit = (task: Task) => {
     setEditingTaskId(task.id);
@@ -86,7 +124,7 @@ const HomeScreen: React.FC = () => {
     setModalVisible(false);
     // If already online, flush immediately so user doesn't need to reload
     if (online) {
-      try { await flushPendingToRemote(); } catch {}
+      try { await flushPendingToRemote(); } catch { }
     }
   };
 
@@ -104,7 +142,7 @@ const HomeScreen: React.FC = () => {
       }
     });
     if (online) {
-      try { await flushPendingToRemote(); } catch {}
+      try { await flushPendingToRemote(); } catch { }
     }
   };
 
@@ -122,7 +160,7 @@ const HomeScreen: React.FC = () => {
       }
     });
     if (online) {
-      try { await flushPendingToRemote(); } catch {}
+      try { await flushPendingToRemote(); } catch { }
     }
   };
 
@@ -254,12 +292,132 @@ const HomeScreen: React.FC = () => {
               returnKeyType="done"
               onSubmitEditing={saveTask}
             />
+            <View style={styles.metaRow}>
+              <TouchableOpacity style={styles.metaIconBtn} accessibilityLabel="Pick due date" onPress={handleOpenDatePicker}>
+                <MaterialIcons name="calendar-today" size={20} color="#4f46e5" />
+                <Text style={styles.metaIconLabel}>{selectedDate ? selectedDate.toDateString() : 'Date'}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.metaIconBtn} accessibilityLabel="Set priority" onPress={() => setPriorityModalVisible(true)}>
+                <MaterialIcons name="flag" size={20} color={selectedPriority === 'high' ? '#ef4444' : selectedPriority === 'medium' ? '#f59e0b' : selectedPriority === 'low' ? '#10b981' : selectedPriority === 'none' ? '#9ca3af' : '#ef4444'} />
+                <Text style={styles.metaIconLabel}>{selectedPriority ? selectedPriority[0].toUpperCase() + selectedPriority.slice(1) : 'Priority'}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.metaIconBtn} accessibilityLabel="Set time" onPress={handleOpenTimePicker}>
+                <MaterialIcons name="access-time" size={20} color="#10b981" />
+                <Text style={styles.metaIconLabel}>{selectedTime ? selectedTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Time'}</Text>
+              </TouchableOpacity>
+            </View>
             <View style={styles.modalActions}>
               <TouchableOpacity style={[styles.modalBtn, styles.modalCancel]} onPress={closeModal}>
                 <Text style={styles.modalBtnText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity style={[styles.modalBtn, styles.modalSave]} onPress={saveTask}>
                 <Text style={[styles.modalBtnText, styles.modalSaveText]}>{editingTaskId ? 'Save' : 'Add'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Date Picker (iOS only modal) */}
+      {Platform.OS === 'ios' && (
+        <Modal visible={dateModalVisible} animationType="slide" transparent onRequestClose={() => setDateModalVisible(false)}>
+          <View style={styles.modalBackdrop}>
+            <View style={styles.modalCard}>
+              <Text style={styles.modalTitle}>Select Due Date</Text>
+              <View style={{ backgroundColor: 'white', borderRadius: ms(12) }}>
+                <DateTimePicker
+                  value={selectedDate ?? new Date()}
+                  mode="date"
+                  display="inline"
+                  onChange={(_event: any, date?: Date) => {
+                    if (date) setSelectedDate(date);
+                  }}
+                />
+              </View>
+              <View style={[styles.modalActions, { marginTop: vs(12) }]}>
+                <TouchableOpacity style={[styles.modalBtn, styles.modalCancel]} onPress={() => setDateModalVisible(false)}>
+                  <Text style={styles.modalBtnText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.modalBtn, styles.modalSave]} onPress={() => setDateModalVisible(false)}>
+                  <Text style={[styles.modalBtnText, styles.modalSaveText]}>Done</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+      )}
+
+      {/* Time Picker (iOS only modal) */}
+      {Platform.OS === 'ios' && (
+        <Modal visible={timeModalVisible} animationType="slide" transparent onRequestClose={() => setTimeModalVisible(false)}>
+          <View style={styles.modalBackdrop}>
+            <View style={styles.modalCard}>
+              <Text style={styles.modalTitle}>Select Time</Text>
+              <View style={{ backgroundColor: 'white', borderRadius: ms(12) }}>
+                <DateTimePicker
+                  value={selectedTime ?? new Date()}
+                  mode="time"
+                  display="inline"
+                  onChange={(_event: any, date?: Date) => {
+                    if (date) setSelectedTime(date);
+                  }}
+                />
+              </View>
+              <View style={[styles.modalActions, { marginTop: vs(12) }]}>
+                <TouchableOpacity style={[styles.modalBtn, styles.modalCancel]} onPress={() => setTimeModalVisible(false)}>
+                  <Text style={styles.modalBtnText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.modalBtn, styles.modalSave]} onPress={() => setTimeModalVisible(false)}>
+                  <Text style={[styles.modalBtnText, styles.modalSaveText]}>Done</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+      )}
+
+      {/* Priority Picker Modal */}
+      <Modal visible={priorityModalVisible} animationType="fade" transparent onRequestClose={() => setPriorityModalVisible(false)}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Select Priority</Text>
+            <View style={styles.priorityList}>
+              <TouchableOpacity
+                style={styles.priorityOption}
+                onPress={() => { setSelectedPriority('none'); setPriorityModalVisible(false); }}
+                accessibilityLabel="No priority"
+              >
+                <MaterialIcons name="flag" size={20} color="#9ca3af" />
+                <Text style={[styles.priorityLabel, { color: '#374151' }]}>None</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.priorityOption}
+                onPress={() => { setSelectedPriority('high'); setPriorityModalVisible(false); }}
+                accessibilityLabel="High priority"
+              >
+                <MaterialIcons name="flag" size={20} color="#ef4444" />
+                <Text style={[styles.priorityLabel, { color: '#ef4444' }]}>High</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.priorityOption}
+                onPress={() => { setSelectedPriority('medium'); setPriorityModalVisible(false); }}
+                accessibilityLabel="Medium priority"
+              >
+                <MaterialIcons name="flag" size={20} color="#f59e0b" />
+                <Text style={[styles.priorityLabel, { color: '#f59e0b' }]}>Medium</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.priorityOption}
+                onPress={() => { setSelectedPriority('low'); setPriorityModalVisible(false); }}
+                accessibilityLabel="Low priority"
+              >
+                <MaterialIcons name="flag" size={20} color="#10b981" />
+                <Text style={[styles.priorityLabel, { color: '#10b981' }]}>Low</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={[styles.modalBtn, styles.modalCancel]} onPress={() => setPriorityModalVisible(false)}>
+                <Text style={styles.modalBtnText}>Close</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -315,6 +473,12 @@ const styles = StyleSheet.create({
   modalCard: { backgroundColor: 'white', padding: ms(16), borderTopLeftRadius: ms(20), borderTopRightRadius: ms(20) },
   modalTitle: { fontSize: ms(18), fontWeight: '800', marginBottom: vs(10), color: '#111827' },
   modalInput: { borderWidth: 1, borderColor: '#e5e7eb', backgroundColor: '#f9fafb', borderRadius: ms(12), padding: ms(12) },
+  metaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: vs(10), marginBottom: vs(4) },
+  metaIconBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'white', borderWidth: 1, borderColor: '#e5e7eb', paddingVertical: vs(8), paddingHorizontal: s(12), borderRadius: ms(12), shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 2 },
+  metaIconLabel: { marginLeft: s(8), color: '#374151', fontWeight: '700', fontSize: ms(12) },
+  priorityList: { marginTop: vs(4) },
+  priorityOption: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#f9fafb', borderWidth: 1, borderColor: '#e5e7eb', paddingVertical: vs(10), paddingHorizontal: s(12), borderRadius: ms(12), marginBottom: vs(8) },
+  priorityLabel: { marginLeft: s(10), fontWeight: '800', fontSize: ms(13) },
   modalActions: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: vs(12) },
   modalBtn: { paddingVertical: vs(10), paddingHorizontal: s(14), borderRadius: ms(10) },
   modalCancel: { backgroundColor: '#f3f4f6', marginRight: s(8) },
