@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,8 @@ import {
 } from 'react-native';
 import MaterialIcons from '@react-native-vector-icons/material-icons';
 import { useAuth } from '../auth/AuthContext';
+import { getRealm, newId, TaskRecord } from '../data/realm';
+import { startTaskSync, stopTaskSync } from '../data/syncService';
 import { scale as s, verticalScale as vs, moderateScale as ms } from 'react-native-size-matters';
 
 type Task = {
@@ -47,24 +49,67 @@ const HomeScreen: React.FC = () => {
     setEditingTaskId(null);
   };
 
-  const saveTask = () => {
+  const saveTask = async () => {
     const title = inputValue.trim();
-    if (!title) return;
-    if (editingTaskId) {
-      setTasks(prev => prev.map(t => (t.id === editingTaskId ? { ...t, title } : t)));
-    } else {
-      const id = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-      setTasks(prev => [{ id, title, completed: false }, ...prev]);
-    }
-    closeModal();
+    if (!title || !user?.uid) return;
+    const realm = await getRealm();
+    realm.write(() => {
+      if (editingTaskId) {
+        const rec = realm.objectForPrimaryKey<TaskRecord>('Task', editingTaskId);
+        if (rec) {
+          rec.title = title;
+          rec.updatedAt = new Date();
+          rec.updatedAtMillis = Date.now();
+          rec.dirty = true;
+          rec.deleted = false;
+          console.log('[Realm] saveTask edit', { id: editingTaskId, title, dirty: rec.dirty, updatedAtMillis: rec.updatedAtMillis });
+        }
+      } else {
+        realm.create<TaskRecord>('Task', {
+          _id: newId(),
+          userId: user.uid,
+          title,
+          completed: false,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          updatedAtMillis: Date.now(),
+          dirty: true,
+          deleted: false,
+        });
+        console.log('[Realm] saveTask add', { title });
+      }
+    });
+    setModalVisible(false);
   };
 
-  const toggleTask = (id: string) => {
-    setTasks(prev => prev.map(t => (t.id === id ? { ...t, completed: !t.completed } : t)));
+  const toggleTask = async (id: string) => {
+    if (!user?.uid) return;
+    const realm = await getRealm();
+    realm.write(() => {
+      const rec = realm.objectForPrimaryKey<TaskRecord>('Task', id);
+      if (rec) {
+        rec.completed = !rec.completed;
+        rec.updatedAt = new Date();
+        rec.updatedAtMillis = Date.now();
+        rec.dirty = true;
+        console.log('[Realm] toggleTask', { id, completed: rec.completed, dirty: rec.dirty, updatedAtMillis: rec.updatedAtMillis });
+      }
+    });
   };
 
-  const deleteTask = (id: string) => {
-    setTasks(prev => prev.filter(t => t.id !== id));
+  const deleteTask = async (id: string) => {
+    if (!user?.uid) return;
+    const realm = await getRealm();
+    realm.write(() => {
+      const rec = realm.objectForPrimaryKey<TaskRecord>('Task', id);
+      if (rec) {
+        rec.deleted = true;
+        rec.updatedAt = new Date();
+        rec.updatedAtMillis = Date.now();
+        rec.dirty = true;
+        console.log('[Realm] deleteTask mark', { id, deleted: rec.deleted, dirty: rec.dirty });
+      }
+    });
   };
 
   const renderItem = ({ item }: { item: Task }) => (
@@ -94,6 +139,40 @@ const HomeScreen: React.FC = () => {
       </View>
     </View>
   );
+
+  useEffect(() => {
+    let results: any | null = null;
+    let realmClosed = false;
+
+    const attach = async () => {
+      if (!user?.uid) {
+        setTasks([]);
+        stopTaskSync();
+        return;
+      }
+      const realm = await getRealm();
+      if (realmClosed) return;
+      // Start online sync service
+      console.log('[Sync] startTaskSync', { userId: user.uid });
+      startTaskSync(user.uid);
+      results = realm.objects<TaskRecord>('Task').filtered('userId == $0 AND deleted == false', user.uid);
+      const update = () => {
+        const mapped: Task[] = results.map((r: TaskRecord) => ({ id: r._id, title: r.title, completed: r.completed }));
+        setTasks(mapped);
+        console.log('[Realm] subscription update -> UI', { count: mapped.length, first: mapped[0] });
+      };
+      update();
+      results.addListener(update);
+    };
+
+    attach();
+    return () => {
+      try {
+        results?.removeAllListeners?.();
+      } catch { }
+      realmClosed = true;
+    };
+  }, [user?.uid]);
 
   return (
     <View style={styles.container}>
