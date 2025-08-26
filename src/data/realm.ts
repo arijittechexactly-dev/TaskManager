@@ -10,6 +10,9 @@ export type TaskRecord = {
   updatedAtMillis: number; // for conflict resolution
   dirty: boolean; // needs sync to Firestore
   deleted: boolean; // soft delete for offline
+  // New optional fields for richer task metadata
+  priority?: 'high' | 'medium' | 'low' | 'none';
+  dueAt?: Date | null;
 };
 
 const TaskSchema: ObjectSchema = {
@@ -25,6 +28,8 @@ const TaskSchema: ObjectSchema = {
     updatedAtMillis: {type: 'int', default: 0},
     dirty: {type: 'bool', default: false},
     deleted: {type: 'bool', default: false},
+    priority: {type: 'string', default: 'none', optional: true},
+    dueAt: {type: 'date', optional: true},
   },
 };
 
@@ -33,7 +38,19 @@ let realmInstance: Realm | null = null;
 
 export async function getRealm(): Promise<Realm> {
   if (realmInstance && !realmInstance.isClosed) return realmInstance;
-  realmInstance = await Realm.open({schema: [TaskSchema], schemaVersion: 1});
+  realmInstance = await Realm.open({
+    schema: [TaskSchema],
+    schemaVersion: 2,
+    onMigration: (oldRealm: Realm, newRealm: Realm) => {
+      if (oldRealm.schemaVersion < 2) {
+        const newObjects = newRealm.objects<any>('Task');
+        for (let i = 0; i < newObjects.length; i++) {
+          if (newObjects[i].priority === undefined) newObjects[i].priority = 'none';
+          if (newObjects[i].dueAt === undefined) newObjects[i].dueAt = null;
+        }
+      }
+    },
+  });
   return realmInstance;
 }
 

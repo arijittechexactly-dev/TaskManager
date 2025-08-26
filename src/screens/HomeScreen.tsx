@@ -12,7 +12,7 @@ import {
   Dimensions,
   Platform,
 } from 'react-native';
-import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
+import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import MaterialIcons from '@react-native-vector-icons/material-icons';
 import { useAuth } from '../auth/AuthContext';
 import { getRealm, newId, TaskRecord } from '../data/realm';
@@ -20,11 +20,16 @@ import { startTaskSync, stopTaskSync, flushPendingToRemote } from '../data/syncS
 import { scale as s, verticalScale as vs, moderateScale as ms } from 'react-native-size-matters';
 import { useAppSelector } from '../store/hooks';
 import type { RootState } from '../store';
+import DatePickerModal from '../components/modals/DatePickerModal';
+import TimePickerModal from '../components/modals/TimePickerModal';
+import PriorityPickerModal from '../components/modals/PriorityPickerModal';
 
 type Task = {
   id: string;
   title: string;
   completed: boolean;
+  priority?: 'high' | 'medium' | 'low' | 'none';
+  dueAt?: Date | null;
 };
 
 const HomeScreen: React.FC = () => {
@@ -49,6 +54,8 @@ const HomeScreen: React.FC = () => {
     setEditingTaskId(null);
     setInputValue('');
     setSelectedPriority('none');
+    setSelectedDate(null);
+    setSelectedTime(null);
     setModalVisible(true);
   };
 
@@ -80,9 +87,26 @@ const HomeScreen: React.FC = () => {
     }
     setDateModalVisible(true);
   };
-  const openEdit = (task: Task) => {
+  const openEdit = async (task: Task) => {
     setEditingTaskId(task.id);
     setInputValue(task.title);
+    try {
+      const realm = await getRealm();
+      const rec = realm.objectForPrimaryKey<TaskRecord>('Task', task.id);
+      if (rec) {
+        // Prefill priority and date/time
+        const pr = (rec as any).priority as Task['priority'] | undefined;
+        const due = (rec as any).dueAt as Date | undefined;
+        setSelectedPriority(pr ?? 'none');
+        if (due) {
+          setSelectedDate(new Date(due));
+          setSelectedTime(new Date(due));
+        } else {
+          setSelectedDate(null);
+          setSelectedTime(null);
+        }
+      }
+    } catch { }
     setModalVisible(true);
   };
   const closeModal = () => {
@@ -94,6 +118,18 @@ const HomeScreen: React.FC = () => {
   const saveTask = async () => {
     const title = inputValue.trim();
     if (!title || !user?.uid) return;
+    const buildDueAt = (): Date | null => {
+      if (!selectedDate && !selectedTime) return null;
+      const base = new Date(selectedDate ?? new Date());
+      const time = selectedTime ?? null;
+      if (time) {
+        base.setHours(time.getHours(), time.getMinutes(), 0, 0);
+      } else {
+        base.setHours(0, 0, 0, 0);
+      }
+      return base;
+    };
+    const dueAt = buildDueAt();
     const realm = await getRealm();
     realm.write(() => {
       if (editingTaskId) {
@@ -104,6 +140,10 @@ const HomeScreen: React.FC = () => {
           rec.updatedAtMillis = Date.now();
           rec.dirty = true;
           rec.deleted = false;
+          // @ts-ignore extend dynamic properties if schema has them
+          (rec as any).priority = selectedPriority ?? 'none';
+          // @ts-ignore
+          (rec as any).dueAt = dueAt;
           console.log('[Realm] saveTask edit', { id: editingTaskId, title, dirty: rec.dirty, updatedAtMillis: rec.updatedAtMillis });
         }
       } else {
@@ -117,6 +157,10 @@ const HomeScreen: React.FC = () => {
           updatedAtMillis: Date.now(),
           dirty: true,
           deleted: false,
+          // @ts-ignore
+          priority: selectedPriority ?? 'none',
+          // @ts-ignore
+          dueAt,
         });
         console.log('[Realm] saveTask add', { title });
       }
@@ -180,6 +224,30 @@ const HomeScreen: React.FC = () => {
         <Text style={[styles.taskText, item.completed && styles.taskTextDone]} numberOfLines={2}>
           {item.title}
         </Text>
+        <View style={styles.metaBadgesRow}>
+          {!!item.dueAt && (
+            <View style={styles.badge}>
+              <MaterialIcons name="event" size={14} color="#4f46e5" />
+              <Text style={styles.badgeText}>{new Date(item.dueAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</Text>
+            </View>
+          )}
+          {!!item.dueAt && (
+            <View style={styles.badge}>
+              <MaterialIcons name="schedule" size={14} color="#10b981" />
+              <Text style={styles.badgeText}>{new Date(item.dueAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
+            </View>
+          )}
+          {item.priority && item.priority !== 'none' && (
+            <View style={styles.badge}>
+              <MaterialIcons
+                name="flag"
+                size={14}
+                color={item.priority === 'high' ? '#ef4444' : item.priority === 'medium' ? '#f59e0b' : '#10b981'}
+              />
+              <Text style={styles.badgeText}>{item.priority[0].toUpperCase() + item.priority.slice(1)}</Text>
+            </View>
+          )}
+        </View>
       </Pressable>
       <View style={styles.actions}>
         <TouchableOpacity style={styles.iconBtn} onPress={() => openEdit(item)}>
@@ -209,7 +277,13 @@ const HomeScreen: React.FC = () => {
       startTaskSync(user.uid);
       results = realm.objects<TaskRecord>('Task').filtered('userId == $0 AND deleted == false', user.uid);
       const update = () => {
-        const mapped: Task[] = results.map((r: TaskRecord) => ({ id: r._id, title: r.title, completed: r.completed }));
+        const mapped: Task[] = results.map((r: any) => ({
+          id: r._id,
+          title: r.title,
+          completed: r.completed,
+          priority: r.priority ?? 'none',
+          dueAt: r.dueAt ?? null,
+        }));
         setTasks(mapped);
         console.log('[Realm] subscription update -> UI', { count: mapped.length, first: mapped[0] });
       };
@@ -320,109 +394,33 @@ const HomeScreen: React.FC = () => {
 
       {/* Date Picker (iOS only modal) */}
       {Platform.OS === 'ios' && (
-        <Modal visible={dateModalVisible} animationType="slide" transparent onRequestClose={() => setDateModalVisible(false)}>
-          <View style={styles.modalBackdrop}>
-            <View style={styles.modalCard}>
-              <Text style={styles.modalTitle}>Select Due Date</Text>
-              <View style={{ backgroundColor: 'white', borderRadius: ms(12) }}>
-                <DateTimePicker
-                  value={selectedDate ?? new Date()}
-                  mode="date"
-                  display="inline"
-                  onChange={(_event: any, date?: Date) => {
-                    if (date) setSelectedDate(date);
-                  }}
-                />
-              </View>
-              <View style={[styles.modalActions, { marginTop: vs(12) }]}>
-                <TouchableOpacity style={[styles.modalBtn, styles.modalCancel]} onPress={() => setDateModalVisible(false)}>
-                  <Text style={styles.modalBtnText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={[styles.modalBtn, styles.modalSave]} onPress={() => setDateModalVisible(false)}>
-                  <Text style={[styles.modalBtnText, styles.modalSaveText]}>Done</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </Modal>
+        <DatePickerModal
+          visible={dateModalVisible}
+          value={selectedDate}
+          onChange={(d) => setSelectedDate(d)}
+          onRequestClose={() => setDateModalVisible(false)}
+          title="Select Due Date"
+        />
       )}
 
       {/* Time Picker (iOS only modal) */}
       {Platform.OS === 'ios' && (
-        <Modal visible={timeModalVisible} animationType="slide" transparent onRequestClose={() => setTimeModalVisible(false)}>
-          <View style={styles.modalBackdrop}>
-            <View style={styles.modalCard}>
-              <Text style={styles.modalTitle}>Select Time</Text>
-              <View style={{ backgroundColor: 'white', borderRadius: ms(12) }}>
-                <DateTimePicker
-                  value={selectedTime ?? new Date()}
-                  mode="time"
-                  display="inline"
-                  onChange={(_event: any, date?: Date) => {
-                    if (date) setSelectedTime(date);
-                  }}
-                />
-              </View>
-              <View style={[styles.modalActions, { marginTop: vs(12) }]}>
-                <TouchableOpacity style={[styles.modalBtn, styles.modalCancel]} onPress={() => setTimeModalVisible(false)}>
-                  <Text style={styles.modalBtnText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={[styles.modalBtn, styles.modalSave]} onPress={() => setTimeModalVisible(false)}>
-                  <Text style={[styles.modalBtnText, styles.modalSaveText]}>Done</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </Modal>
+        <TimePickerModal
+          visible={timeModalVisible}
+          value={selectedTime}
+          onChange={(d) => setSelectedTime(d)}
+          onRequestClose={() => setTimeModalVisible(false)}
+          title="Select Time"
+        />
       )}
 
       {/* Priority Picker Modal */}
-      <Modal visible={priorityModalVisible} animationType="fade" transparent onRequestClose={() => setPriorityModalVisible(false)}>
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Select Priority</Text>
-            <View style={styles.priorityList}>
-              <TouchableOpacity
-                style={styles.priorityOption}
-                onPress={() => { setSelectedPriority('none'); setPriorityModalVisible(false); }}
-                accessibilityLabel="No priority"
-              >
-                <MaterialIcons name="flag" size={20} color="#9ca3af" />
-                <Text style={[styles.priorityLabel, { color: '#374151' }]}>None</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.priorityOption}
-                onPress={() => { setSelectedPriority('high'); setPriorityModalVisible(false); }}
-                accessibilityLabel="High priority"
-              >
-                <MaterialIcons name="flag" size={20} color="#ef4444" />
-                <Text style={[styles.priorityLabel, { color: '#ef4444' }]}>High</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.priorityOption}
-                onPress={() => { setSelectedPriority('medium'); setPriorityModalVisible(false); }}
-                accessibilityLabel="Medium priority"
-              >
-                <MaterialIcons name="flag" size={20} color="#f59e0b" />
-                <Text style={[styles.priorityLabel, { color: '#f59e0b' }]}>Medium</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.priorityOption}
-                onPress={() => { setSelectedPriority('low'); setPriorityModalVisible(false); }}
-                accessibilityLabel="Low priority"
-              >
-                <MaterialIcons name="flag" size={20} color="#10b981" />
-                <Text style={[styles.priorityLabel, { color: '#10b981' }]}>Low</Text>
-              </TouchableOpacity>
-            </View>
-            <View style={styles.modalActions}>
-              <TouchableOpacity style={[styles.modalBtn, styles.modalCancel]} onPress={() => setPriorityModalVisible(false)}>
-                <Text style={styles.modalBtnText}>Close</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      <PriorityPickerModal
+        visible={priorityModalVisible}
+        selected={(selectedPriority ?? 'none') as 'high' | 'medium' | 'low' | 'none'}
+        onSelect={(p) => { setSelectedPriority(p); setPriorityModalVisible(false); }}
+        onRequestClose={() => setPriorityModalVisible(false)}
+      />
     </View>
   );
 };
@@ -458,13 +456,16 @@ const styles = StyleSheet.create({
   emptyWrap: { alignItems: 'center', gap: vs(6) },
   emptyText: { color: '#6b7280', fontSize: ms(13) },
 
-  taskItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: vs(12), paddingHorizontal: s(12), borderRadius: ms(14), backgroundColor: '#f8fafc', marginBottom: vs(10), borderWidth: 1, borderColor: '#e5e7eb' },
+  taskItem: { flexDirection: 'row', paddingVertical: vs(12), paddingHorizontal: s(12), borderRadius: ms(14), backgroundColor: '#f8fafc', marginBottom: vs(10), borderWidth: 1, borderColor: '#e5e7eb' },
   taskItemDone: { backgroundColor: '#f0fdf4', borderColor: '#bbf7d0' },
   checkbox: { marginRight: s(10) },
   taskTextWrap: { flex: 1 },
   taskText: { color: '#111827', fontSize: ms(14) },
   taskTextDone: { color: '#6b7280', textDecorationLine: 'line-through' },
-  actions: { flexDirection: 'row', marginLeft: s(8) },
+  metaBadgesRow: { flexDirection: 'row', flexWrap: 'wrap', gap: s(6), marginTop: vs(6) },
+  badge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#f3f4f6', paddingVertical: vs(4), paddingHorizontal: s(8), borderRadius: ms(999), borderWidth: 1, borderColor: '#e5e7eb' },
+  badgeText: { marginLeft: s(4), color: '#374151', fontWeight: '700', fontSize: ms(11) },
+  actions: { flexDirection: 'row', marginLeft: s(8), alignSelf: "flex-start" },
   iconBtn: { padding: s(6), marginLeft: s(4), borderRadius: ms(10), backgroundColor: 'white', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 2 },
 
   fab: { position: 'absolute', right: s(20), bottom: vs(24), height: ms(56), width: ms(56), borderRadius: ms(28), backgroundColor: '#7c3aed', alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.18, shadowRadius: 14, elevation: 6 },
