@@ -1,6 +1,6 @@
-import NetInfo, { NetInfoState } from '@react-native-community/netinfo';
+import NetInfo, {NetInfoState} from '@react-native-community/netinfo';
 import firestore from '@react-native-firebase/firestore';
-import { getRealm, TaskRecord } from './realm';
+import {getRealm, TaskRecord} from './realm';
 import Realm from 'realm';
 
 let unsubscribeNetInfo: (() => void) | null = null;
@@ -25,8 +25,12 @@ export async function startTaskSync(userId: string) {
           snap.docChanges().forEach(change => {
             const id = change.doc.id;
             const data = change.doc.data();
-            const existing = realmInstance.objectForPrimaryKey<TaskRecord>('Task', id);
-            const remoteUpdatedAt = (data.updatedAt?.toMillis?.() ?? 0) as number;
+            const existing = realmInstance.objectForPrimaryKey<TaskRecord>(
+              'Task',
+              id,
+            );
+            const remoteUpdatedAt = (data.updatedAt?.toMillis?.() ??
+              0) as number;
             if (change.type === 'removed') {
               // If remote removed, mark local as deleted (or delete if not dirty)
               if (existing && !existing.dirty) {
@@ -38,20 +42,26 @@ export async function startTaskSync(userId: string) {
             }
             // Upsert with conflict resolution: pick the newer updatedAtMillis
             if (!existing) {
-              realmInstance.create<TaskRecord>('Task', {
-                _id: id,
-                userId: currentUserId!,
-                title: String(data.title ?? ''),
-                completed: Boolean(data.completed ?? false),
-                createdAt: data.createdAt?.toDate?.() ?? new Date(),
-                updatedAt: data.updatedAt?.toDate?.() ?? new Date(),
-                updatedAtMillis: remoteUpdatedAt,
-                dirty: false,
-                deleted: false,
-              }, Realm.UpdateMode.Modified);
+              realmInstance.create<TaskRecord>(
+                'Task',
+                {
+                  _id: id,
+                  userId: currentUserId!,
+                  title: String(data.title ?? ''),
+                  completed: Boolean(data.completed ?? false),
+                  createdAt: data.createdAt?.toDate?.() ?? new Date(),
+                  updatedAt: data.updatedAt?.toDate?.() ?? new Date(),
+                  updatedAtMillis: remoteUpdatedAt,
+                  dirty: false,
+                  deleted: false,
+                },
+                Realm.UpdateMode.Modified,
+              );
             } else if (remoteUpdatedAt > existing.updatedAtMillis) {
               existing.title = String(data.title ?? existing.title);
-              existing.completed = Boolean(data.completed ?? existing.completed);
+              existing.completed = Boolean(
+                data.completed ?? existing.completed,
+              );
               existing.updatedAt = data.updatedAt?.toDate?.() ?? new Date();
               existing.updatedAtMillis = remoteUpdatedAt;
               existing.deleted = false;
@@ -91,10 +101,15 @@ export function stopTaskSync() {
 export async function flushPendingToRemote() {
   if (!currentUserId) return;
   const realm = await getRealm();
-  const dirty = realm.objects<TaskRecord>('Task').filtered('userId == $0 AND dirty == true', currentUserId);
+  const dirty = realm
+    .objects<TaskRecord>('Task')
+    .filtered('userId == $0 AND dirty == true', currentUserId);
 
   const batch = firestore().batch();
-  const col = firestore().collection('users').doc(currentUserId).collection('tasks');
+  const col = firestore()
+    .collection('users')
+    .doc(currentUserId)
+    .collection('tasks');
 
   // Prepare batch
   dirty.forEach((t: TaskRecord) => {
@@ -102,12 +117,17 @@ export async function flushPendingToRemote() {
     if (t.deleted) {
       batch.delete(ref);
     } else {
-      batch.set(ref, {
-        title: t.title,
-        completed: t.completed,
-        createdAt: firestore.FieldValue.serverTimestamp(),
-        updatedAt: firestore.FieldValue.serverTimestamp(),
-      }, { merge: true });
+      batch.set(
+        ref,
+        {
+          title: t.title,
+          completed: t.completed,
+          // Preserve the original creation time from local storage; do not overwrite on updates
+          createdAt: t.createdAt,
+          updatedAt: firestore.FieldValue.serverTimestamp(),
+        },
+        {merge: true},
+      );
     }
   });
 

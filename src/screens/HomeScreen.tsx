@@ -12,9 +12,10 @@ import {
   Dimensions,
 } from 'react-native';
 import MaterialIcons from '@react-native-vector-icons/material-icons';
+import NetInfo from '@react-native-community/netinfo';
 import { useAuth } from '../auth/AuthContext';
 import { getRealm, newId, TaskRecord } from '../data/realm';
-import { startTaskSync, stopTaskSync } from '../data/syncService';
+import { startTaskSync, stopTaskSync, flushPendingToRemote } from '../data/syncService';
 import { scale as s, verticalScale as vs, moderateScale as ms } from 'react-native-size-matters';
 
 type Task = {
@@ -29,6 +30,8 @@ const HomeScreen: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [inputValue, setInputValue] = useState('');
+  const [online, setOnline] = useState<boolean>(false);
+  const [pendingCount, setPendingCount] = useState<number>(0);
 
   const greeting = useMemo(() => `Hello${user?.email ? `, ${user.email}` : ''} 👋`, [user?.email]);
   const remainingCount = tasks.filter(t => !t.completed).length;
@@ -80,6 +83,10 @@ const HomeScreen: React.FC = () => {
       }
     });
     setModalVisible(false);
+    // If already online, flush immediately so user doesn't need to reload
+    if (online) {
+      try { await flushPendingToRemote(); } catch {}
+    }
   };
 
   const toggleTask = async (id: string) => {
@@ -95,6 +102,9 @@ const HomeScreen: React.FC = () => {
         console.log('[Realm] toggleTask', { id, completed: rec.completed, dirty: rec.dirty, updatedAtMillis: rec.updatedAtMillis });
       }
     });
+    if (online) {
+      try { await flushPendingToRemote(); } catch {}
+    }
   };
 
   const deleteTask = async (id: string) => {
@@ -110,6 +120,9 @@ const HomeScreen: React.FC = () => {
         console.log('[Realm] deleteTask mark', { id, deleted: rec.deleted, dirty: rec.dirty });
       }
     });
+    if (online) {
+      try { await flushPendingToRemote(); } catch {}
+    }
   };
 
   const renderItem = ({ item }: { item: Task }) => (
@@ -174,6 +187,48 @@ const HomeScreen: React.FC = () => {
     };
   }, [user?.uid]);
 
+  // Track online/offline and pending dirty count
+  useEffect(() => {
+    let pendingResults: any | null = null;
+    let unsubscribeNet: undefined | (() => void);
+    let cancelled = false;
+
+    const attach = async () => {
+      if (!user?.uid) {
+        setPendingCount(0);
+        setOnline(false);
+        return;
+      }
+      const realm = await getRealm();
+      if (cancelled) return;
+
+      // Pending (dirty) items listener
+      pendingResults = realm
+        .objects<TaskRecord>('Task')
+        .filtered('userId == $0 AND dirty == true', user.uid);
+      const updatePending = () => setPendingCount(pendingResults.length);
+      updatePending();
+      pendingResults.addListener(updatePending);
+
+      // Connectivity listener
+      unsubscribeNet = NetInfo.addEventListener(state => {
+        const isOnline = Boolean(state.isConnected && state.isInternetReachable);
+        setOnline(isOnline);
+      });
+      const net = await NetInfo.fetch();
+      setOnline(Boolean(net.isConnected && net.isInternetReachable));
+    };
+
+    attach();
+    return () => {
+      try {
+        pendingResults?.removeAllListeners?.();
+      } catch {}
+      unsubscribeNet?.();
+      cancelled = true;
+    };
+  }, [user?.uid]);
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#eef2ff" />
@@ -187,10 +242,18 @@ const HomeScreen: React.FC = () => {
           </View>
           <Text style={styles.brand}>TaskManager</Text>
         </View>
-        <TouchableOpacity onPress={signOut} style={styles.signOutBtn}>
-          <MaterialIcons name="logout" size={18} color="#ef4444" />
-          <Text style={styles.signOutText}>Sign out</Text>
-        </TouchableOpacity>
+        <View style={styles.rightRow}>
+          <View style={styles.statusBadge} accessibilityLabel={`Status ${online ? 'online' : 'offline'}, pending ${pendingCount}`}>
+            <View style={[styles.statusDot, online ? styles.statusDotOnline : styles.statusDotOffline]} />
+            <Text style={styles.statusText}>
+              {online ? 'Online' : 'Offline'}{pendingCount > 0 ? ` • ${pendingCount}` : ''}
+            </Text>
+          </View>
+          <TouchableOpacity onPress={signOut} style={styles.signOutBtn}>
+            <MaterialIcons name="logout" size={18} color="#ef4444" />
+            <Text style={styles.signOutText}>Sign out</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <View style={styles.card}>
@@ -258,6 +321,12 @@ const styles = StyleSheet.create({
   brandRow: { flexDirection: 'row', alignItems: 'center' },
   logoCircle: { height: ms(32), width: ms(32), borderRadius: ms(16), backgroundColor: '#eef2ff', alignItems: 'center', justifyContent: 'center', marginRight: s(8) },
   brand: { fontWeight: '800', color: '#4f46e5', letterSpacing: 0.3, fontSize: ms(14) },
+  rightRow: { flexDirection: 'row', alignItems: 'center' },
+  statusBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'white', paddingHorizontal: s(8), paddingVertical: vs(4), borderRadius: ms(12), borderWidth: 1, borderColor: '#e5e7eb', marginRight: s(8) },
+  statusDot: { width: ms(8), height: ms(8), borderRadius: ms(4), marginRight: s(6) },
+  statusDotOnline: { backgroundColor: '#16a34a' },
+  statusDotOffline: { backgroundColor: '#9ca3af' },
+  statusText: { color: '#374151', fontWeight: '700', fontSize: ms(11) },
   signOutBtn: { flexDirection: 'row', alignItems: 'center', gap: s(6), backgroundColor: 'white', paddingHorizontal: s(10), paddingVertical: vs(6), borderRadius: ms(10), shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 6 },
   signOutText: { color: '#ef4444', fontWeight: '700', marginLeft: s(6), fontSize: ms(12) },
 
