@@ -12,15 +12,30 @@ import { store } from './src/store';
 import { AuthProvider } from './src/auth/AuthContext';
 import AppNavigator from './src/navigation/AppNavigator';
 import GlobalSyncListeners from './src/app/GlobalSyncListeners';
+import { ThemeProvider, useTheme } from './src/theme';
+
+const ThemedStatusBar: React.FC = () => {
+  const { isDark, colors } = useTheme();
+  return (
+    <StatusBar
+      barStyle={isDark ? 'light-content' : 'dark-content'}
+      backgroundColor={colors.background}
+      translucent={false}
+      animated
+    />
+  );
+};
 
 function App(): React.JSX.Element {
   return (
     <Provider store={store}>
-      <AuthProvider>
-        <StatusBar barStyle={'dark-content'} />
-        <GlobalSyncListeners />
-        <AppNavigator />
-      </AuthProvider>
+      <ThemeProvider>
+        <AuthProvider>
+          <GlobalSyncListeners />
+          <AppNavigator />
+          <ThemedStatusBar />
+        </AuthProvider>
+      </ThemeProvider>
     </Provider>
   );
 }
