@@ -12,8 +12,8 @@ import {
   Dimensions,
   Platform,
 } from 'react-native';
+import messaging from '@react-native-firebase/messaging';
 import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
-import MaterialIcons from '@react-native-vector-icons/material-icons';
 import { useAuth } from '../auth/AuthContext';
 import { getRealm, newId, TaskRecord } from '../data/realm';
 import { startTaskSync, stopTaskSync, flushPendingToRemote } from '../data/syncService';
@@ -25,6 +25,7 @@ import type { RootState } from '../store';
 import DatePickerModal from '../components/modals/DatePickerModal';
 import TimePickerModal from '../components/modals/TimePickerModal';
 import PriorityPickerModal from '../components/modals/PriorityPickerModal';
+import MaterialIcons from '@react-native-vector-icons/material-icons';
 
 type Task = {
   id: string;
@@ -300,12 +301,32 @@ const HomeScreen: React.FC = () => {
     </View>
   );
 
-  // Request notification permissions when component mounts
+  // Request notification permissions and get FCM token when component mounts
   useEffect(() => {
     if (user?.uid) {
-      notificationService.requestPermission().catch(error => {
-        console.error('Failed to request notification permissions:', error);
-      });
+      const setupNotifications = async () => {
+        try {
+          // Request permissions
+          await notificationService.requestPermission();
+
+          // Get and log FCM token
+          const fcmToken = await notificationService.getFCMToken();
+          console.log('=== FCM Token ===');
+          console.log(fcmToken);
+          console.log('================');
+
+          // Set up token refresh listener
+          messaging().onTokenRefresh(token => {
+            console.log('=== New FCM Token ===');
+            console.log(token);
+            console.log('===================');
+          });
+        } catch (error) {
+          console.error('Failed to setup notifications:', error);
+        }
+      };
+
+      setupNotifications();
     }
   }, [user?.uid, notificationService]);
 
