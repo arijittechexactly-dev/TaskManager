@@ -18,6 +18,7 @@ import { useAuth } from '../auth/AuthContext';
 import { getRealm, newId, TaskRecord } from '../data/realm';
 import { startTaskSync, stopTaskSync, flushPendingToRemote } from '../data/syncService';
 import { scale as s, verticalScale as vs, moderateScale as ms } from 'react-native-size-matters';
+import NotificationService from '../services/NotificationService';
 import { useTheme } from '../theme';
 import { useAppSelector } from '../store/hooks';
 import type { RootState } from '../store';
@@ -37,6 +38,7 @@ const HomeScreen: React.FC = () => {
   const { user, signOut } = useAuth();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
+  const notificationService = useMemo(() => NotificationService.getInstance(), []);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [inputValue, setInputValue] = useState('');
   const [dateModalVisible, setDateModalVisible] = useState(false);
@@ -134,6 +136,8 @@ const HomeScreen: React.FC = () => {
     };
     const dueAt = buildDueAt();
     const realm = await getRealm();
+    let taskId = editingTaskId || newId();
+
     realm.write(() => {
       if (editingTaskId) {
         const rec = realm.objectForPrimaryKey<TaskRecord>('Task', editingTaskId);
@@ -148,10 +152,12 @@ const HomeScreen: React.FC = () => {
           // @ts-ignore
           (rec as any).dueAt = dueAt;
           console.log('[Realm] saveTask edit', { id: editingTaskId, title, dirty: rec.dirty, updatedAtMillis: rec.updatedAtMillis });
+          taskId = editingTaskId;
         }
       } else {
+        taskId = newId();
         realm.create<TaskRecord>('Task', {
-          _id: newId(),
+          _id: taskId,
           userId: user.uid,
           title,
           completed: false,
@@ -169,6 +175,17 @@ const HomeScreen: React.FC = () => {
       }
     });
     setModalVisible(false);
+
+    // Schedule notification if due date is set
+    if (dueAt && taskId) {
+      try {
+        await notificationService.cancelTaskReminder(taskId); // Cancel any existing reminder
+        await notificationService.scheduleTaskReminder(taskId, title, dueAt);
+      } catch (error) {
+        console.error('Failed to schedule notification:', error);
+      }
+    }
+
     // If already online, flush immediately so user doesn't need to reload
     if (online) {
       try { await flushPendingToRemote(); } catch { }
@@ -178,16 +195,28 @@ const HomeScreen: React.FC = () => {
   const toggleTask = async (id: string) => {
     if (!user?.uid) return;
     const realm = await getRealm();
+    let isCompleted = false;
     realm.write(() => {
       const rec = realm.objectForPrimaryKey<TaskRecord>('Task', id);
       if (rec) {
-        rec.completed = !rec.completed;
+        isCompleted = !rec.completed;
+        rec.completed = isCompleted;
         rec.updatedAt = new Date();
         rec.updatedAtMillis = Date.now();
         rec.dirty = true;
         console.log('[Realm] toggleTask', { id, completed: rec.completed, dirty: rec.dirty, updatedAtMillis: rec.updatedAtMillis });
       }
     });
+
+    // If task is completed, cancel any scheduled notifications
+    if (isCompleted) {
+      try {
+        await notificationService.cancelTaskReminder(id);
+      } catch (error) {
+        console.error('Failed to cancel notification:', error);
+      }
+    }
+
     if (online) {
       try { await flushPendingToRemote(); } catch { }
     }
@@ -206,6 +235,14 @@ const HomeScreen: React.FC = () => {
         console.log('[Realm] deleteTask mark', { id, deleted: rec.deleted, dirty: rec.dirty });
       }
     });
+
+    // Cancel any scheduled notification for this task
+    try {
+      await notificationService.cancelTaskReminder(id);
+    } catch (error) {
+      console.error('Failed to cancel notification:', error);
+    }
+
     if (online) {
       try { await flushPendingToRemote(); } catch { }
     }
@@ -262,6 +299,15 @@ const HomeScreen: React.FC = () => {
       </View>
     </View>
   );
+
+  // Request notification permissions when component mounts
+  useEffect(() => {
+    if (user?.uid) {
+      notificationService.requestPermission().catch(error => {
+        console.error('Failed to request notification permissions:', error);
+      });
+    }
+  }, [user?.uid, notificationService]);
 
   useEffect(() => {
     let results: any | null = null;
