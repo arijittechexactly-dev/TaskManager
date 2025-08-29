@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, StyleSheet, TouchableOpacity, Alert, StatusBar, Platform } from 'react-native';
+import { View, Text, TextInput, StyleSheet, TouchableOpacity, Alert, StatusBar, Platform, KeyboardAvoidingView, ScrollView } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AuthStackParamList } from '../navigation/AppNavigator';
 import { useAuth } from '../auth/AuthContext';
@@ -47,73 +47,82 @@ const SignupScreen: React.FC<SignupScreenProps> = ({ navigation }) => {
   const styles = createStyles(colors, isDark);
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <StatusBar
-        barStyle={isDark ? "light-content" : "dark-content"}
-        backgroundColor={colors.background}
-        translucent={Platform.OS === 'ios'}
-      />
+    <KeyboardAvoidingView
+      style={[styles.container, { backgroundColor: colors.background }]}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 25}
+    >
+      <ScrollView contentContainerStyle={styles.scrollContainer}>
+        <StatusBar
+          barStyle={isDark ? "light-content" : "dark-content"}
+          backgroundColor={colors.background}
+          translucent={Platform.OS === 'ios'}
+        />
 
-      {/* Decorative background accent */}
-      <View style={[styles.accentTopRight, { backgroundColor: colors.primary + '40' }]} />
+        {/* Decorative background accent */}
+        <View style={[styles.accentTopRight, { backgroundColor: colors.primary + '40' }]} />
 
-      <View style={styles.card}>
-        <View style={styles.headerRow}>
-          <View style={styles.logoCircle}>
-            <MaterialIcons name="task-alt" size={22} color="#16a34a" />
+        <View style={styles.card}>
+          <View style={styles.headerRow}>
+            <View style={styles.logoCircle}>
+              <MaterialIcons name="task-alt" size={22} color="#16a34a" />
+            </View>
+            <Text style={styles.brand}>TaskManager</Text>
           </View>
-          <Text style={styles.brand}>TaskManager</Text>
-        </View>
 
-        <Text style={styles.title}>Create your account</Text>
-        <Text style={styles.subtitle}>Sign up to get started with your tasks</Text>
+          <Text style={styles.title}>Create your account</Text>
+          <Text style={styles.subtitle}>Sign up to get started with your tasks</Text>
 
-        <View style={styles.fieldContainer}>
-          <Text style={styles.label}>Email</Text>
-          <TextInput
-            placeholder="you@example.com"
-            value={email}
-            onChangeText={(t) => { setEmail(t); if (emailError) validateEmail(t); }}
-            onBlur={() => validateEmail(email)}
-            style={[styles.input, emailError && styles.inputError]}
-            autoCapitalize="none"
-            keyboardType="email-address"
-          />
-          {!!emailError && <Text style={styles.errorText}>{emailError}</Text>}
-        </View>
-
-        <View style={styles.fieldContainer}>
-          <Text style={styles.label}>Password</Text>
-          <View style={styles.passwordWrapper}>
+          <View style={styles.fieldContainer}>
+            <Text style={styles.label}>Email</Text>
             <TextInput
-              placeholder="••••••••"
-              value={password}
-              onChangeText={(t) => { setPassword(t); if (passwordError) validatePassword(t); }}
-              onBlur={() => validatePassword(password)}
-              style={[styles.input, styles.passwordInput, passwordError && styles.inputError]}
-              secureTextEntry={!showPassword}
+              placeholder="you@example.com"
+              value={email}
+              onChangeText={(t) => { setEmail(t); if (emailError) validateEmail(t); }}
+              onBlur={() => validateEmail(email)}
+              style={[styles.input, emailError && styles.inputError]}
+              autoCapitalize="none"
+              keyboardType="email-address"
             />
-            <TouchableOpacity accessibilityRole="button" accessibilityLabel={showPassword ? 'Hide password' : 'Show password'} onPress={() => setShowPassword(s => !s)} style={styles.iconButton}>
-              <MaterialIcons name={showPassword ? 'visibility-off' : 'visibility'} size={22} color="#6b7280" />
-            </TouchableOpacity>
+            {!!emailError && <Text style={styles.errorText}>{emailError}</Text>}
           </View>
-          {!!passwordError && <Text style={styles.errorText}>{passwordError}</Text>}
-        </View>
 
-        <TouchableOpacity onPress={onSignup} style={[styles.button, !email || !password || emailError || passwordError ? styles.buttonDisabled : null]} disabled={loading || !email || !password || !!emailError || !!passwordError}>
-          <Text style={styles.buttonText}>{loading ? 'Signing up...' : 'Sign Up'}</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={styles.link}>Already have an account? Log In</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
+          <View style={styles.fieldContainer}>
+            <Text style={styles.label}>Password</Text>
+            <View style={styles.passwordWrapper}>
+              <TextInput
+                placeholder="••••••••"
+                value={password}
+                onChangeText={(t) => { setPassword(t); if (passwordError) validatePassword(t); }}
+                onBlur={() => validatePassword(password)}
+                style={[styles.input, styles.passwordInput, passwordError && styles.inputError]}
+                secureTextEntry={!showPassword}
+              />
+              <TouchableOpacity accessibilityRole="button" accessibilityLabel={showPassword ? 'Hide password' : 'Show password'} onPress={() => setShowPassword(s => !s)} style={styles.iconButton}>
+                <MaterialIcons name={showPassword ? 'visibility-off' : 'visibility'} size={22} color="#6b7280" />
+              </TouchableOpacity>
+            </View>
+            {!!passwordError && <Text style={styles.errorText}>{passwordError}</Text>}
+          </View>
+
+          <TouchableOpacity onPress={onSignup} style={[styles.button, !email || !password || emailError || passwordError ? styles.buttonDisabled : null]} disabled={loading || !email || !password || !!emailError || !!passwordError}>
+            <Text style={styles.buttonText}>{loading ? 'Signing up...' : 'Sign Up'}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => navigation.goBack()}>
+            <Text style={styles.link}>Already have an account? Log In</Text>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 };
 
 const createStyles = (colors: any, isDark: boolean) => StyleSheet.create({
   container: {
     flex: 1,
+  },
+  scrollContainer: {
+    flexGrow: 1,
     padding: 24,
     justifyContent: 'center' as const,
   },

@@ -434,6 +434,7 @@ const HomeScreen: React.FC = () => {
             <Text style={styles.modalTitle}>{editingTaskId ? 'Edit Task' : 'New Task'}</Text>
             <TextInput
               placeholder="What do you need to do?"
+              placeholderTextColor={colors.textSecondary}
               value={inputValue}
               onChangeText={setInputValue}
               style={styles.modalInput}
@@ -444,7 +445,7 @@ const HomeScreen: React.FC = () => {
             <View style={styles.metaRow}>
               <TouchableOpacity style={styles.metaIconBtn} accessibilityLabel="Pick due date" onPress={handleOpenDatePicker}>
                 <MaterialIcons name="calendar-today" size={20} color={colors.primary} />
-                <Text style={styles.metaIconLabel}>{selectedDate ? selectedDate.toDateString() : 'Date'}</Text>
+                <Text style={styles.metaIconLabel}>{selectedDate ? selectedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Date'}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.metaIconBtn} accessibilityLabel="Set priority" onPress={() => setPriorityModalVisible(true)}>
                 <MaterialIcons name="flag" size={20} color={selectedPriority === 'high' ? colors.danger : selectedPriority === 'medium' ? colors.warning : selectedPriority === 'low' ? colors.success : selectedPriority === 'none' ? colors.muted : colors.danger} />
@@ -544,14 +545,14 @@ function createStyles(colors: any) {
     actions: { flexDirection: 'row', marginLeft: s(8), alignSelf: 'flex-start' },
     iconBtn: { padding: s(6), marginLeft: s(4), borderRadius: ms(10), backgroundColor: colors.surface, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 2 },
 
-    fab: { position: 'absolute', right: s(20), bottom: vs(24), height: ms(56), width: ms(56), borderRadius: ms(28), backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.18, shadowRadius: 14, elevation: 6 },
+    fab: { position: 'absolute', right: s(20), bottom: vs(40), height: ms(56), width: ms(56), borderRadius: ms(28), backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.18, shadowRadius: 14, elevation: 6 },
 
     modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'flex-end' },
     modalCard: { backgroundColor: colors.surface, padding: ms(16), borderTopLeftRadius: ms(20), borderTopRightRadius: ms(20) },
     modalTitle: { fontSize: ms(18), fontWeight: '800', marginBottom: vs(10), color: colors.textPrimary },
-    modalInput: { borderWidth: 1, borderColor: colors.border, backgroundColor: colors.badgeBg, borderRadius: ms(12), padding: ms(12) },
+    modalInput: { borderWidth: 1, borderColor: colors.border, backgroundColor: colors.badgeBg, borderRadius: ms(12), padding: ms(12), color: colors.textPrimary },
     metaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: vs(10), marginBottom: vs(4) },
-    metaIconBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, paddingVertical: vs(8), paddingHorizontal: s(12), borderRadius: ms(12), shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 2 },
+    metaIconBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, paddingVertical: vs(8), paddingHorizontal: s(11), borderRadius: ms(12), shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 2 },
     metaIconLabel: { marginLeft: s(8), color: colors.textSecondary, fontWeight: '700', fontSize: ms(12) },
     priorityList: { marginTop: vs(4) },
     priorityOption: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.badgeBg, borderWidth: 1, borderColor: colors.border, paddingVertical: vs(10), paddingHorizontal: s(12), borderRadius: ms(12), marginBottom: vs(8) },
