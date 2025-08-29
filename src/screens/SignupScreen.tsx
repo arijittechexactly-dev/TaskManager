@@ -1,14 +1,16 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, StyleSheet, TouchableOpacity, Alert, StatusBar } from 'react-native';
+import { View, Text, TextInput, StyleSheet, TouchableOpacity, Alert, StatusBar, Platform } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AuthStackParamList } from '../navigation/AppNavigator';
 import { useAuth } from '../auth/AuthContext';
 import MaterialIcons from '@react-native-vector-icons/material-icons';
+import { useTheme } from '../theme';
 
 export type SignupScreenProps = NativeStackScreenProps<AuthStackParamList, 'Signup'>;
 
 const SignupScreen: React.FC<SignupScreenProps> = ({ navigation }) => {
   const { signUp } = useAuth();
+  const { colors, isDark } = useTheme();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -42,13 +44,18 @@ const SignupScreen: React.FC<SignupScreenProps> = ({ navigation }) => {
     }
   };
 
-  return (
-    <View style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#eef2ff" />
+  const styles = createStyles(colors, isDark);
 
-      {/* Decorative background accents */}
-      <View style={styles.accentTopRight} />
-      <View style={styles.accentBottomLeft} />
+  return (
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <StatusBar
+        barStyle={isDark ? "light-content" : "dark-content"}
+        backgroundColor={colors.background}
+        translucent={Platform.OS === 'ios'}
+      />
+
+      {/* Decorative background accent */}
+      <View style={[styles.accentTopRight, { backgroundColor: colors.primary + '40' }]} />
 
       <View style={styles.card}>
         <View style={styles.headerRow}>
@@ -104,28 +111,132 @@ const SignupScreen: React.FC<SignupScreenProps> = ({ navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
-  container: { flex: 1, padding: 24, justifyContent: 'center', backgroundColor: '#eef2ff' },
-  card: { backgroundColor: 'white', borderRadius: 20, padding: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.12, shadowRadius: 16, elevation: 6 },
-  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
-  logoCircle: { height: 36, width: 36, borderRadius: 18, backgroundColor: '#ecfdf5', alignItems: 'center', justifyContent: 'center', marginRight: 8 },
-  brand: { fontWeight: '800', color: '#16a34a', letterSpacing: 0.3 },
-  title: { fontSize: 26, fontWeight: '800', marginTop: 4, marginBottom: 6, textAlign: 'center', color: '#111827' },
-  subtitle: { fontSize: 14, color: '#6b7280', textAlign: 'center', marginBottom: 16 },
-  fieldContainer: { marginBottom: 14 },
-  label: { marginBottom: 6, color: '#374151', fontWeight: '600' },
-  input: { borderWidth: 1, borderColor: '#e5e7eb', backgroundColor: '#f9fafb', borderRadius: 12, padding: 12, paddingRight: 44, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 2 },
-  passwordWrapper: { position: 'relative' },
-  passwordInput: { paddingRight: 44 },
-  iconButton: { position: 'absolute', right: 10, top: 12, height: 24, width: 24, alignItems: 'center', justifyContent: 'center' },
-  inputError: { borderColor: '#ef4444' },
-  errorText: { marginTop: 6, color: '#ef4444' },
-  button: { backgroundColor: '#16a34a', padding: 14, borderRadius: 12, alignItems: 'center', marginTop: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.12, shadowRadius: 10, elevation: 3 },
-  buttonDisabled: { opacity: 0.6 },
-  buttonText: { color: 'white', fontWeight: '700' },
-  link: { marginTop: 16, color: '#16a34a', textAlign: 'center', fontWeight: '700' },
-  accentTopRight: { position: 'absolute', top: -40, right: -30, height: 160, width: 160, borderRadius: 80, backgroundColor: '#c7d2fe', opacity: 0.45 },
-  accentBottomLeft: { position: 'absolute', bottom: -30, left: -40, height: 200, width: 200, borderRadius: 100, backgroundColor: '#a7f3d0', opacity: 0.35 },
+const createStyles = (colors: any, isDark: boolean) => StyleSheet.create({
+  container: {
+    flex: 1,
+    padding: 24,
+    justifyContent: 'center' as const,
+  },
+  card: {
+    backgroundColor: colors.surface,
+    borderRadius: 20,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: isDark ? 0.3 : 0.12,
+    shadowRadius: 16,
+    elevation: 6
+  },
+  headerRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    marginBottom: 8
+  },
+  logoCircle: {
+    height: 36,
+    width: 36,
+    borderRadius: 18,
+    backgroundColor: colors.background,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    marginRight: 8
+  },
+  brand: {
+    fontWeight: '800' as const,
+    color: colors.primary,
+    letterSpacing: 0.3
+  },
+  title: {
+    fontSize: 26,
+    fontWeight: '800' as const,
+    marginTop: 4,
+    marginBottom: 6,
+    textAlign: 'center' as const,
+    color: colors.textPrimary
+  },
+  subtitle: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    textAlign: 'center' as const,
+    marginBottom: 16
+  },
+  fieldContainer: {
+    marginBottom: 14
+  },
+  label: {
+    marginBottom: 6,
+    color: colors.textPrimary,
+    fontWeight: '600' as const
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    borderRadius: 12,
+    padding: 12,
+    paddingRight: 44,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 2,
+    color: colors.textPrimary
+  },
+  passwordWrapper: {
+    position: 'relative' as const
+  },
+  passwordInput: {
+    paddingRight: 44
+  },
+  iconButton: {
+    position: 'absolute' as const,
+    right: 10,
+    top: 12,
+    height: 24,
+    width: 24,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const
+  },
+  inputError: {
+    borderColor: colors.danger
+  },
+  errorText: {
+    marginTop: 6,
+    color: colors.danger
+  },
+  button: {
+    backgroundColor: colors.primary,
+    padding: 14,
+    borderRadius: 12,
+    alignItems: 'center' as const,
+    marginTop: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: isDark ? 0.3 : 0.12,
+    shadowRadius: 10,
+    elevation: 3
+  },
+  buttonDisabled: {
+    opacity: 0.6
+  },
+  buttonText: {
+    color: 'white',
+    fontWeight: '700' as const
+  },
+  link: {
+    marginTop: 16,
+    color: colors.primary,
+    textAlign: 'center' as const,
+    fontWeight: '700' as const
+  },
+  accentTopRight: {
+    position: 'absolute' as const,
+    top: -40,
+    right: -30,
+    height: 160,
+    width: 160,
+    borderRadius: 80
+  }
 });
 
 export default SignupScreen;

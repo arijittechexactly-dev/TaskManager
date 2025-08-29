@@ -53,7 +53,12 @@ const HomeScreen: React.FC = () => {
 
   const { colors, isDark } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const greeting = useMemo(() => `Hello${user?.email ? `, ${user.email}` : ''} 👋`, [user?.email]);
+  // const greeting = useMemo(() => `Hello${user?.email ? `, ${user.email}` : ''} 👋`, [user?.email]);
+  const greeting = useMemo(() => {
+    const firstName = user?.email ? user.email.split('@')[0].split(/[._-]/)[0] : '';
+    const name = firstName.charAt(0).toUpperCase() + firstName.slice(1);
+    return `Hello${name ? `, ${name}` : ''} 👋`;
+  }, [user?.email]);
   const remainingCount = tasks.filter(t => !t.completed).length;
 
   const openAdd = () => {
