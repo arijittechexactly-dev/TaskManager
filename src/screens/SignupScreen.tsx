@@ -49,8 +49,8 @@ const SignupScreen: React.FC<SignupScreenProps> = ({ navigation }) => {
   return (
     <KeyboardAvoidingView
       style={[styles.container, { backgroundColor: colors.background }]}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 25}
+      behavior="padding"
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : -64}
     >
       <ScrollView contentContainerStyle={styles.scrollContainer}>
         <StatusBar
